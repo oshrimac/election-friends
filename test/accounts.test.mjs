@@ -45,7 +45,7 @@ test('public organizer accounts own groups; invited guests never gain administra
   await ok(b,'account/register','POST',{username:'Beta',password});
   assert.equal((await call(guest,'account/register','POST',{username:'alpha',password})).status,409);
   assert.equal((await call(guest,'account/register','POST',{username:'bad name',password})).status,400);
-  assert.equal((await call(guest,'account/register','POST',{username:'short',password:'short'})).status,400);
+  assert.equal((await call(guest,'account/register','POST',{username:'short',password:'123'})).status,400);
   assert.equal((await call(guest,'account/login','POST',{username:'missing',password})).status,401);
   assert.equal((await call(guest,'account/login','POST',{username:'Alpha',password:'wrong'})).status,401);
   const ua=(await ok(a,'account/state')).user,ub=(await ok(b,'account/state')).user;
@@ -108,6 +108,12 @@ test('public organizer accounts own groups; invited guests never gain administra
   field(returning,'#account-username','Gamma');field(returning,'#account-password',password);submit(returning,'#account-auth-form');
   await until(()=>returning.window.document.querySelector('#account-group-form'));
   assert.equal(returning.window.document.querySelector('a[href^="/admin?group="]').getAttribute('href'),adminPath);
+  // Four characters are accepted; three are rejected.
+  const shortJar=new CookieJar();
+  await ok(shortJar,'account/register','POST',{username:'FourChars',password:'1234'});
+  await ok(shortJar,'account/logout','POST',{});
+  await ok(shortJar,'account/login','POST',{username:'FourChars',password:'1234'});
+  assert.equal((await ok(shortJar,'account/state')).user.username,'FourChars');
   // Persistent failed-login counters still block attempts after correct credentials.
   const accounts=createAccounts(db);
   for(let i=0;i<10;i++)await assert.rejects(()=>accounts.login({username:'limited',password:'wrong'},'limit-test'),e=>e.status===401);

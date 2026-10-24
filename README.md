@@ -25,7 +25,7 @@ npm ci
 npm run admin:password
 ```
 
-The password command asks for a new password in a terminal with hidden input. Use at least 16 characters. It prints a **password hash**, not your password. Create `.env.local` and store the hash as a single literal line:
+The password command asks for a new password in a terminal with hidden input. Use at least 4 characters. It prints a **password hash**, not your password. Create `.env.local` and store the hash as a single literal line:
 
 ```dotenv
 ADMIN_PASSWORD_HASH=scrypt$<salt>$<hash>
@@ -71,7 +71,7 @@ Select your intended workspace and project. Configure the database and environme
 
 ## Organizer accounts and independent friend groups
 
-Anyone can open the home URL, choose **הרשמה**, and create an organizer account with a unique username and a password of 16–256 characters. Username/password sign-in is implemented. Google/Gmail sign-in is not enabled and requires a separately configured OAuth integration.
+Anyone can open the home URL, choose **הרשמה**, and create an organizer account with a unique username and a password of 4–256 characters. Username/password sign-in is implemented. Google/Gmail sign-in is not enabled and requires a separately configured OAuth integration.
 
 1. Open `/`, register or sign in, and enter a group title under **פתיחת קבוצה**.
 2. The group is owned by the signed-in account. Open **ניהול הקבוצה**; no separate group password is needed.
