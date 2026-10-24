@@ -37,8 +37,8 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
  const db=await getDb(),server=createServer(),jar=new CookieJar(),clients=[];
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const origin='http://127.0.0.1:'+server.address().port;
- async function request(path,method='GET',body,slug,extraCookies=''){
-  const url=origin+'/api/'+path+(slug===undefined?'':'?group='+encodeURIComponent(slug));
+ async function request(path,method='GET',body,slug='default',extraCookies=''){
+  const url=origin+'/api/'+path+(slug===undefined?'':(path.includes('?')?'&':'?')+'group='+encodeURIComponent(slug));
   const cookie=extraCookies||await jar.getCookieString(url);
   const r=await fetch(url,{method,headers:{Origin:origin,Cookie:cookie,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
   for(const c of r.headers.getSetCookie())await jar.setCookie(c,url);
@@ -59,6 +59,12 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   clients.push(d);await until(()=>d.window.document.querySelector('#ballot-status').textContent!=='מתחברים…');return d;
  }
  try {
+  const missing=await fetch(origin+'/api/state');
+  assert.equal(missing.status,404);
+  const home=await ui('/');
+  assert.match(home.window.document.querySelector('h1').textContent,/לאיזה פרלמנט/);
+  assert.equal(home.window.document.querySelector('#join-form'),null);
+  assert.equal(home.window.document.querySelector('#group-name').textContent,'הקלפי');
   assert.equal((await request('admin/groups','POST',{title:'denied',password:passA})).status,401);
   await ok('admin/login','POST',{password:ownerPassword});
   const a=await ok('admin/groups','POST',{title:'קבוצה א',password:passA});
@@ -107,7 +113,7 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   for(const slug of ['','missing','x'.repeat(24),'default&group=other']){
    assert.equal((await request('state','GET',null,slug)).status,404);
   }
-  const routed=await ok('index?ballotRoute=state&group='+b.slug);
+  const routed=await ok('index?ballotRoute=state','GET',null,b.slug);
   assert.equal(routed.groupSlug,b.slug);assert.equal(routed.title,'קבוצה ב');
   const duplicate=await fetch(origin+'/api/state?group='+a.slug+'&group='+b.slug);
   assert.equal(duplicate.status,404);
@@ -133,6 +139,7 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   const owner=await ui('/admin');
   assert.ok(owner.window.document.querySelector('#create-group-form'));
   assert.equal(owner.window.document.querySelectorAll('a[href^="/admin?group="]').length,2);
+  assert.equal(owner.window.document.querySelector('[aria-label="קישור הקבוצה"]').value,origin+'/?group=default');
   const ownerDoc=owner.window.document;
   ownerDoc.querySelector('#new-group-title').value='קבוצה מהממשק';
   ownerDoc.querySelector('#new-group-password').value='group-C-password-123';

@@ -71,7 +71,7 @@ Select your intended workspace and project. Configure the database and environme
 
 ## Independent friend groups
 
-The existing home URL and `/admin` remain the original group. Existing participants, predictions, results, personal links and admin sessions remain valid. `DATABASE_URL` and `ADMIN_PASSWORD_HASH` are unchanged.
+The home URL without a group code shows a neutral invitation screen; no group is selected automatically. The original group is available explicitly at `/?group=default`, and `/admin` remains the site-owner management entry point. Existing participants, predictions, results, personal recovery links and admin sessions remain valid. Old personal recovery links with an access token are resolved to the original group; previously shared bare home/scoreboard links must be replaced by `/?group=default` or `/?group=default#ranking`. All API requests must explicitly include a group code. `DATABASE_URL` and `ADMIN_PASSWORD_HASH` are unchanged.
 
 1. Sign in at the original `/admin` with the existing site-owner password.
 2. In **עוד פרלמנט, קישור משלו**, enter the new group's title and a new administrator password (16–256 characters). Store it privately; only its scrypt hash is stored in the database.

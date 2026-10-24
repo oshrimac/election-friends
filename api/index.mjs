@@ -23,8 +23,8 @@ export default async function handler(req,res) {
    else {let data='';for await (const chunk of req) {data+=chunk;if(Buffer.byteLength(data)>16384) throw new AppError(413,'בקשה גדולה מדי');}try {body=JSON.parse(data);} catch {throw new AppError(400,'JSON אינו תקין');}}
    if(!body||typeof body!=='object'||Array.isArray(body)) throw new AppError(400,'בקשה לא תקינה');
   }
-  const slug=requestUrl.searchParams.get('group')??'default';
-  if(requestUrl.searchParams.getAll('group').length>1||!(/^[A-Za-z0-9_-]{24}$/.test(slug)||slug==='default')) throw new AppError(404,'הקבוצה לא נמצאה. בדקו את הקישור שקיבלתם');
+  const slug=requestUrl.searchParams.get('group');
+  if(slug===null||requestUrl.searchParams.getAll('group').length>1||!(/^[A-Za-z0-9_-]{24}$/.test(slug)||slug==='default')) throw new AppError(404,'הקבוצה לא נמצאה. בדקו את הקישור שקיבלתם');
   const db=await getDb();
   const group=(await db.query('SELECT id FROM ballot_game WHERE slug=$1',[slug])).rows[0];
   if(!group) throw new AppError(404,'הקבוצה לא נמצאה. בדקו את הקישור שקיבלתם');

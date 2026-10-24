@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
 const groupParams=new URLSearchParams(location.search);
-const groupQuery=groupParams.has('group')?'?'+groupParams.getAll('group').map(g=>'group='+encodeURIComponent(g)).join('&'):'';
+const groupQuery=groupParams.has('group')?'?'+groupParams.getAll('group').map(g=>'group='+encodeURIComponent(g)).join('&'):(location.pathname==='/admin'||location.hash.startsWith('#access=')?'?group=default':'');
 const groupUrl=(path='/',hash='')=>location.origin+path+groupQuery+hash;
 const root=document.getElementById('ballot-app'),$=s=>root.querySelector(s);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -65,7 +65,17 @@ if(form.id==='login-form'){const password=$('#admin-password').value;await actio
 if(form.id==='settings-form'){const title=$('#group-title').value,parties=$('#party-names').value.split('\n').map(s=>s.trim()).filter(Boolean),value=$('#close-time').value,deadline=state.configured&&isClosed()?state.deadline:value?new Date(value).toISOString():null;await action(async()=>{await api('admin/settings','PUT',{title,parties,deadline,version:state.version});await load();});}});
 function downloadReport(){const safe=x=>'"'+String(x??'').replace(/^[=+\-@\t\r]/,"'$&").replace(/"/g,'""')+'"';const lines=[['קבוצה',state.title],['פורסם',fmt(state.publishedAt)],['מקור / הערה',state.resultsNote],['ניקוד','120 פחות מחצית סכום ההפרשים המוחלטים'],[],['מקום','שם','ניקוד',...state.parties.map(n=>'תחזית: '+n),...state.parties.map(n=>'אמת: '+n)],...state.scoreboard.map(p=>[p.rank,p.name,p.score,...p.prediction,...state.actual])];const blob=new Blob(['\ufeff'+lines.map(r=>r.map(safe).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='election-scoreboard.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 window.addEventListener('beforeunload',e=>{if(dirty||actualDirty){e.preventDefault();e.returnValue='';}});
-async function init(){try{const fragment=location.hash;if(fragment.startsWith('#access=')){history.replaceState(null,'',location.pathname+groupQuery);await api('recover','POST',{token:fragment.slice(8)});}else if(fragment==='#ranking'){tab='ranking';history.replaceState(null,'',location.pathname+groupQuery);}await load();}catch(e){$('#ballot-content').innerHTML=`<section class="panel"><h1>הקלפי נתקעה</h1><p>${esc(e.message)}</p><div class="actions">${button('retry','יאללה, עוד ניסיון',true)}</div></section>`;$('#retry').onclick=init;tell(e.message,true);}}
+async function init(){
+ if(!groupQuery){
+  $('#group-name').textContent='הקלפי';
+  $('#deadline').textContent='';
+  $('#ballot-status').textContent='צריך קישור לקבוצה';
+  root.querySelector('nav').hidden=true;
+  $('#refresh-group').hidden=true;
+  $('#ballot-content').innerHTML='<section class="panel"><h1>לאיזה פרלמנט הגעתם?</h1><p>כדי להצטרף, פתחו את הקישור שקיבלתם ממנהל הקבוצה. לכל קבוצה יש קישור משלה.</p><a class="btn" href="/admin">כניסת מנהל האתר</a></section>';
+  return;
+ }
+ try{const fragment=location.hash;if(fragment.startsWith('#access=')){history.replaceState(null,'',location.pathname+groupQuery);await api('recover','POST',{token:fragment.slice(8)});}else if(fragment==='#ranking'){tab='ranking';history.replaceState(null,'',location.pathname+groupQuery);}await load();}catch(e){$('#ballot-content').innerHTML=`<section class="panel"><h1>הקלפי נתקעה</h1><p>${esc(e.message)}</p><div class="actions">${button('retry','יאללה, עוד ניסיון',true)}</div></section>`;$('#retry').onclick=init;tell(e.message,true);}}
 // Do not replace a form while someone is typing. Read-only reports refresh automatically.
 setInterval(async()=>{if(!state||busy)return;if(!state.closed&&Date.now()+offset>=Date.parse(state.deadline)){state.closed=true;render();tell('נגמר הזמן. הניחושים נעולים — בלי ״רק שינוי קטן״.');}if((tab==='ranking'||tab==='results')&&!dirty&&!actualDirty)try{await load();}catch{tell('הרענון נתקע. יכול להיות שהמספרים פה עוד לא מעודכנים.',true);}},15000);
 init();

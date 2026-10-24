@@ -53,13 +53,13 @@ test('ties share competition rank; perfect and opposite predictions score 120 an
 test('HTTP boundary: cookies, CSRF, methods, private data and persisted state',async()=>{
  const server=createServer();await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const url='http://127.0.0.1:'+server.address().port;
  try{
- const state=await fetch(url+'/api/state');assert.equal(state.status,200);assert.equal(state.headers.get('cache-control'),'no-store');assert.equal((await state.json()).published,true);
- const routed=await fetch(url+'/api/index?ballotRoute=state');assert.equal(routed.status,200);assert.equal((await routed.json()).published,true);
- const denied=await fetch(url+'/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://evil.example'},body:JSON.stringify({password:'x'})});assert.equal(denied.status,403);
- const login=await fetch(url+'/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:url},body:JSON.stringify({password:'a test password of 24 chars'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie');assert.match(cookie,/HttpOnly/);assert.match(cookie,/SameSite=Strict/);assert.equal((await login.json()).token,undefined);
- assert.equal((await (await fetch(url+'/api/state',{headers:{Cookie:cookie.split(';')[0]}})).json()).isAdmin,true);
- const invalid=await fetch(url+'/api/join',{method:'POST',headers:{'Content-Type':'application/json',Origin:url},body:'bad'});assert.equal(invalid.status,400);
- const unsupported=await fetch(url+'/api/state',{method:'DELETE'});assert.equal(unsupported.status,405);
+ const state=await fetch(url+'/api/state?group=default');assert.equal(state.status,200);assert.equal(state.headers.get('cache-control'),'no-store');assert.equal((await state.json()).published,true);
+ const routed=await fetch(url+'/api/index?ballotRoute=state&group=default');assert.equal(routed.status,200);assert.equal((await routed.json()).published,true);
+ const denied=await fetch(url+'/api/admin/login?group=default',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://evil.example'},body:JSON.stringify({password:'x'})});assert.equal(denied.status,403);
+ const login=await fetch(url+'/api/admin/login?group=default',{method:'POST',headers:{'Content-Type':'application/json',Origin:url},body:JSON.stringify({password:'a test password of 24 chars'})});assert.equal(login.status,200);const cookie=login.headers.get('set-cookie');assert.match(cookie,/HttpOnly/);assert.match(cookie,/SameSite=Strict/);assert.equal((await login.json()).token,undefined);
+ assert.equal((await (await fetch(url+'/api/state?group=default',{headers:{Cookie:cookie.split(';')[0]}})).json()).isAdmin,true);
+ const invalid=await fetch(url+'/api/join?group=default',{method:'POST',headers:{'Content-Type':'application/json',Origin:url},body:'bad'});assert.equal(invalid.status,400);
+ const unsupported=await fetch(url+'/api/state?group=default',{method:'DELETE'});assert.equal(unsupported.status,405);
  const html=await fetch(url+'/admin');assert.equal(html.status,200);assert.match(html.headers.get('content-security-policy'),/frame-ancestors 'none'/);assert.match(await html.text(),/app.js/);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });
@@ -82,3 +82,4 @@ test('concurrent lock and prediction cannot admit a write after locking',async()
  const jobs=await Promise.allSettled([svc.lock({version:s.version,locked:true},a),svc.predict({version:s.version,prediction:[60,60]},{player:p.token})]);
  assert.equal(jobs[0].status,'fulfilled');assert.equal(jobs[1].status,'rejected');assert.equal(jobs[1].reason.status,409);
 });
+

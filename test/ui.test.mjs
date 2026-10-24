@@ -11,7 +11,7 @@ test('independent DOM clients: configure → join → save → recover → lock 
  const dir=await mkdtemp(tmpdir()+'/ballot-ui-');process.env.LOCAL_DB_PATH=dir+'/db';
  const password='test-only-password-123456';process.env.ADMIN_PASSWORD_HASH='scrypt$ui$'+scryptSync(password,'ui',64).toString('hex');
  const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port,clients=[],errors=[];
- async function client(path='/') {
+ async function client(path='/?group=default') {
   const jar=new CookieJar(),vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
   const dom=await JSDOM.fromURL(origin+path,{resources:'usable',runScripts:'dangerously',pretendToBeVisual:true,cookieJar:jar,virtualConsole:vc,beforeParse(w){
    w.confirm=()=>true;w.fetch=async(path,options={})=>{const url=new URL(path,origin).href,cookie=await jar.getCookieString(url);const r=await fetch(url,{...options,headers:{...options.headers,Origin:origin,...(cookie?{Cookie:cookie}:{})}});for(const c of r.headers.getSetCookie())await jar.setCookie(c,url);return r;};
@@ -29,12 +29,12 @@ test('independent DOM clients: configure → join → save → recover → lock 
  assert.equal(p.window.document.querySelector('#seat-total').textContent,'120');assert.equal(p.window.document.querySelector('#submit').disabled,false);click(p,'#submit');await until(()=>p.window.document.querySelector('#save-status')?.textContent.includes('יש קבלות מ־'));
  const p2=await client();field(p2,'#player-name','איתי');submit(p2,'#join-form');await until(()=>p2.window.document.querySelector('#submit'));
  for(const [i,v] of [58,52,10].entries())field(p2,`[data-seat="${i}"]`,String(v));click(p2,'#submit');await until(()=>p2.window.document.querySelector('#save-status')?.textContent.includes('יש קבלות מ־'));
- const spectator=await client('/#ranking');assert.equal(spectator.window.document.querySelector('details'),null);assert.match(spectator.window.document.body.textContent,/נועה/);
+ const spectator=await client('/?group=default#ranking');assert.equal(spectator.window.document.querySelector('details'),null);assert.match(spectator.window.document.body.textContent,/נועה/);
  const recovered=await client('/'+new URL(recovery).hash);await until(()=>recovered.window.document.querySelector('#submit'));assert.match(recovered.window.document.querySelector('h1').textContent,/נועה/);assert.equal(recovered.window.location.hash,'');assert.equal(recovered.window.document.querySelector('[data-seat="0"]').value,'60');
  click(a,'#lock');await until(()=>a.window.document.querySelector('#lock')?.textContent==='פתיחה מחדש');
  for(const [i,v] of [60,50,10].entries())field(a,`[data-seat="${i}"]`,String(v));field(a,'#results-note','תוצאות בדיקת ממשק');click(a,'#publish');await until(()=>a.window.document.querySelector('#download-report'));
  assert.match(a.window.document.body.textContent,/120/);assert.match(a.window.document.body.textContent,/118/);
- const report=await client('/#ranking');const body=report.window.document.body.textContent;assert.match(body,/יש קבלות/);assert.match(body,/נועה/);assert.match(body,/איתי/);assert.equal(report.window.document.querySelectorAll('details').length,2);assert.equal(report.window.document.querySelector('#publish'),null);
+ const report=await client('/?group=default#ranking');const body=report.window.document.body.textContent;assert.match(body,/יש קבלות/);assert.match(body,/נועה/);assert.match(body,/איתי/);assert.equal(report.window.document.querySelectorAll('details').length,2);assert.equal(report.window.document.querySelector('#publish'),null);
  const locked=await client('/'+new URL(recovery).hash);await until(()=>locked.window.document.querySelector('#submit'));assert.equal(locked.window.document.querySelector('#submit').disabled,true);assert.equal(locked.window.document.querySelector('[data-seat]'),null);
  assert.deepEqual(errors,[]);
  } finally {for(const c of clients)c.window.close();await new Promise(r=>server.close(r));await (await getDb()).close();await rm(dir,{recursive:true,force:true});}
