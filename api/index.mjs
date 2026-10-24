@@ -1,3 +1,4 @@
+import {createAccounts} from '../lib/accounts.mjs';
 import { getDb } from '../lib/db.mjs';
 import { createService, AppError } from '../lib/service.mjs';
 const cookieName=process.env.VERCEL||process.env.NODE_ENV==='production'?'__Host-ballot':'ballot';
@@ -23,15 +24,28 @@ export default async function handler(req,res) {
    else {let data='';for await (const chunk of req) {data+=chunk;if(Buffer.byteLength(data)>16384) throw new AppError(413,'בקשה גדולה מדי');}try {body=JSON.parse(data);} catch {throw new AppError(400,'JSON אינו תקין');}}
    if(!body||typeof body!=='object'||Array.isArray(body)) throw new AppError(400,'בקשה לא תקינה');
   }
+  const db=await getDb();
+  const c=cookies(req),account=c[cookieName+'-account'];
+  const ip=process.env.VERCEL?(req.headers['x-real-ip']||'unknown'):req.socket?.remoteAddress||'local';
+  if(path.startsWith('/api/account/')){
+   const accounts=createAccounts(db);let data;
+   if(path==='/api/account/state'&&req.method==='GET')data=await accounts.state(account);
+   else if((path==='/api/account/register'||path==='/api/account/login')&&req.method==='POST'){
+    data=await accounts[path.endsWith('/register')?'register':'login'](body,ip);
+    setCookie(res,'account',data.token,28800,1);data={ok:true};
+   }else if(path==='/api/account/logout'&&req.method==='POST'){
+    data=await accounts.logout(account);setCookie(res,'account','',0,1);
+   }else if(path==='/api/account/groups'&&req.method==='POST')data=await accounts.createGroup(body,account,ip);
+   else throw new AppError(404,'הפעולה לא נמצאה');
+   return send(200,data);
+  }
   const slug=requestUrl.searchParams.get('group');
   if(slug===null||requestUrl.searchParams.getAll('group').length>1||!(/^[A-Za-z0-9_-]{24}$/.test(slug)||slug==='default')) throw new AppError(404,'הקבוצה לא נמצאה. בדקו את הקישור שקיבלתם');
-  const db=await getDb();
   const group=(await db.query('SELECT id FROM ballot_game WHERE slug=$1',[slug])).rows[0];
   if(!group) throw new AppError(404,'הקבוצה לא נמצאה. בדקו את הקישור שקיבלתם');
   const groupId=group.id,cookiePrefix=cookieName+(groupId===1?'':'-g'+groupId);
-  const c=cookies(req),auth={player:c[cookiePrefix+'-player'],admin:c[cookiePrefix+'-admin']};
+  const auth={player:c[cookiePrefix+'-player'],admin:c[cookiePrefix+'-admin'],account};
   const svc=createService(db,{groupId});
-  const ip=process.env.VERCEL?(req.headers['x-real-ip']||'unknown'):req.socket?.remoteAddress||'local';
   let result;
   if(path==='/api/state'&&req.method==='GET') result=await svc.read(auth);
   else if(path==='/api/join'&&req.method==='POST') {result=await svc.join(body,ip);setCookie(res,'player',result.token,31536000,groupId);}

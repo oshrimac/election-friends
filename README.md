@@ -1,6 +1,6 @@
 # הקלפי — Election Friends
 
-A Hebrew, right-to-left election prediction game for independent groups of friends. This version replaces the browser-only prototype with a server, persistent PostgreSQL data, private participant access, an admin screen, and public results and rankings.
+A Hebrew, right-to-left election prediction game with organizer accounts and independent groups of friends. This version replaces the browser-only prototype with a server, persistent PostgreSQL data, private participant access, an admin screen, and public results and rankings.
 
 ## What works
 
@@ -69,24 +69,33 @@ npx vercel --prod
 
 Select your intended workspace and project. Configure the database and environment secrets before deploying. Deploying does not itself configure the game or make an unprovisioned database work.
 
-## Independent friend groups
+## Organizer accounts and independent friend groups
 
-The home URL without a group code shows a neutral invitation screen; no group is selected automatically. The original group is available explicitly at `/?group=default`, and `/admin` remains the site-owner management entry point. Existing participants, predictions, results, personal recovery links and admin sessions remain valid. Old personal recovery links with an access token are resolved to the original group; previously shared bare home/scoreboard links must be replaced by `/?group=default` or `/?group=default#ranking`. All API requests must explicitly include a group code. `DATABASE_URL` and `ADMIN_PASSWORD_HASH` are unchanged.
+Anyone can open the home URL, choose **הרשמה**, and create an organizer account with a unique username and a password of 16–256 characters. Username/password sign-in is implemented. Google/Gmail sign-in is not enabled and requires a separately configured OAuth integration.
 
-1. Sign in at the original `/admin` with the existing site-owner password.
-2. In **עוד פרלמנט, קישור משלו**, enter the new group's title and a new administrator password (16–256 characters). Store it privately; only its scrypt hash is stored in the database.
-3. Press **פתיחת קבוצה נפרדת**. The new group appears under **הקבוצות שפתחתם**, with its shareable participant link and a management link.
-4. Open its management link, sign in using that group's password, then configure parties and closing time before sharing.
+1. Open `/`, register or sign in, and enter a group title under **פתיחת קבוצה**.
+2. The group is owned by the signed-in account. Open **ניהול הקבוצה**; no separate group password is needed.
+3. Set the party list and closing time before sharing the participant invitation link.
+4. Friends open the invitation, enter a display name, and save their prediction. They do not need an account, and the invitation grants no administrator rights.
+5. Return to `/` and sign in to find your groups on another device. An account lists only its own groups. Each group checks ownership server-side on every administrative action.
 
 Participant URL: `/?group=<random-group-code>`
 Admin URL: `/admin?group=<random-group-code>`
 Scoreboard: `/?group=<random-group-code>#ranking`
 
-Each group has its own party list, deadline, players, predictions, results, scoreboard, audit rows and admin sessions. Participant names need only be unique within a group. Cookies are scoped by group name, so the same browser can participate in and administer several groups. Personal recovery links and all sharing/navigation retain the group code. Requests with unknown or malformed group codes return 404 rather than falling back to the original group. The original site-owner password is not a login password for new groups.
+An organizer may also join their group as a participant; the organizer account and the private participant session are separate. A different logged-in organizer remains an ordinary guest in groups they do not own. Account sign-out revokes that session across all owned groups; participant sessions remain separate. Account sessions last eight hours, use random 256-bit tokens stored as SHA-256 hashes, and are sent in HttpOnly / SameSite cookies (Secure in production). Passwords use salted scrypt hashes. Failed sign-ins and registration attempts have persisted rate limits. Password recovery, email verification, username changes and Google sign-in are not included. The registration screen tells users to retain their credentials.
 
-Only the authenticated site owner in the original group can create groups or see the list of groups. Group administrators cannot create or list other groups. Anyone holding a group's participant link can join it while open and see its participant names/status; submitted predictions become visible at closing. Links are invitation links, not verified membership or an account system.
+Each group has its own party list, deadline, players, predictions, results, scoreboard and audit rows. Participant names need only be unique within a group. Cookies and server checks prevent participant sessions or legacy group-admin sessions from being reused across groups. Personal recovery links and sharing/navigation retain the group code. Anyone holding a group's invitation can join it while open and see participant names/status; submitted predictions become visible at closing. Invitations are not a verified-membership system.
 
-Deployment: publish the new commit using the existing Vercel settings. First API use performs the idempotent v2 database upgrade within the existing advisory-lock transaction. The database role must have permission to alter existing app tables and create a sequence/indexes. No new environment variables are required. Keep the current Vercel framework preset **Other**.
+### Existing groups and site-owner access
+
+No group is selected automatically at the home URL. The original group remains at `/?group=default`; `/admin` retains the original site-owner password workflow. Existing data, per-group passwords, personal links and admin sessions remain valid. Old personal recovery links without a group code resolve to the original group. Old bare home/scoreboard links should be replaced by explicit group links.
+
+The site owner's legacy group-creation screen remains available in `/admin` for compatibility. Those groups use their existing separate group-admin passwords; creating a new account does not claim a legacy group. Organizer-account groups use account ownership instead. The global `ADMIN_PASSWORD_HASH` remains for legacy site-owner login, not for new organizer accounts.
+
+### Deployment
+
+Publish the commit using the existing Vercel settings, framework preset **Other**. No new environment variables or packages are required. `DATABASE_URL` is required; existing `ADMIN_PASSWORD_HASH` remains unchanged for legacy access. Initial API use performs idempotent v2/v3 schema upgrades under the database advisory lock. They preserve existing groups and predictions while adding account/session tables and nullable group ownership. The database role needs table, sequence and index creation/alteration permissions. All group API calls require an explicit group code; account endpoints are intentionally independent of a group.
 
 ## Your admin workflow
 
@@ -133,7 +142,7 @@ npm run build
 npm test
 ```
 
-Nine automated tests cover the original lifecycle and multiple-group isolation. They cover the full lifecycle with real embedded PostgreSQL, two independent participant sessions, cross-device token recovery, deadline enforcement, unauthorized writes, private pre-close data, malformed submissions, ties, corrected results, failed-login rate limits, HTTP cookies / CSRF checks, concurrent locking, and the UI → API → database → shared report flow in separate simulated DOM clients.
+Ten automated tests cover organizer signup/signin/signout, group ownership, guest access, migration preservation, the original lifecycle and multiple-group isolation. They cover the full lifecycle with real embedded PostgreSQL, two independent participant sessions, cross-device token recovery, deadline enforcement, unauthorized writes, private pre-close data, malformed submissions, ties, corrected results, failed-login rate limits, HTTP cookies / CSRF checks, concurrent locking, and the UI → API → database → shared report flow in separate simulated DOM clients.
 
 `npm audit --omit=dev` reported zero vulnerabilities during preparation.
 

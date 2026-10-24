@@ -35,3 +35,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS ballot_players_group_name ON ballot_players(gr
 ALTER TABLE ballot_admin_sessions ADD COLUMN IF NOT EXISTS group_id integer NOT NULL DEFAULT 1 REFERENCES ballot_game(id);
 CREATE INDEX IF NOT EXISTS ballot_admin_sessions_group ON ballot_admin_sessions(group_id);
 ALTER TABLE ballot_audit ADD COLUMN IF NOT EXISTS group_id integer NOT NULL DEFAULT 1 REFERENCES ballot_game(id);
+
+-- Additive v3: public organizer accounts own groups.
+CREATE TABLE IF NOT EXISTS ballot_users (
+ id uuid PRIMARY KEY, username text NOT NULL, username_key text NOT NULL UNIQUE,
+ password_hash text NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS ballot_user_sessions (
+ token_hash text PRIMARY KEY, user_id uuid NOT NULL REFERENCES ballot_users(id),
+ expires_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ballot_user_sessions_user ON ballot_user_sessions(user_id);
+ALTER TABLE ballot_game ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES ballot_users(id);
+CREATE INDEX IF NOT EXISTS ballot_game_owner ON ballot_game(owner_id);
