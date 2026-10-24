@@ -71,7 +71,7 @@ Select your intended workspace and project. Configure the database and environme
 
 ## Organizer accounts and independent friend groups
 
-Anyone can open the home URL, choose **הרשמה**, and create an organizer account with a unique username and a password of 4–256 characters. Username/password sign-in is implemented. Google/Gmail sign-in is not enabled and requires a separately configured OAuth integration.
+Anyone can open the home URL, choose **הרשמה**, and create an organizer account with a unique username and a password of 4–256 characters, entered twice for confirmation. The server rejects missing or mismatched confirmation before creating an account. Username/password sign-in is implemented. Google/Gmail sign-in is not enabled and requires a separately configured OAuth integration.
 
 1. Open `/`, register or sign in, and enter a group title under **פתיחת קבוצה**.
 2. The group is owned by the signed-in account. Open **ניהול הקבוצה**; no separate group password is needed.
@@ -83,7 +83,7 @@ Participant URL: `/?group=<random-group-code>`
 Admin URL: `/admin?group=<random-group-code>`
 Scoreboard: `/?group=<random-group-code>#ranking`
 
-An organizer may also join their group as a participant; the organizer account and the private participant session are separate. A different logged-in organizer remains an ordinary guest in groups they do not own. Account sign-out revokes that session across all owned groups; participant sessions remain separate. Account sessions last eight hours, use random 256-bit tokens stored as SHA-256 hashes, and are sent in HttpOnly / SameSite cookies (Secure in production). Passwords use salted scrypt hashes. Failed sign-ins and registration attempts have persisted rate limits. Password recovery, email verification, username changes and Google sign-in are not included. The registration screen tells users to retain their credentials.
+An organizer may also join their group as a participant; the organizer account and the private participant session are separate. A different logged-in organizer remains an ordinary guest in groups they do not own. Account sign-out revokes that session across all owned groups; participant sessions remain separate. Account sessions last eight hours, use random 256-bit tokens stored as SHA-256 hashes, and are sent in HttpOnly / SameSite cookies (Secure in production). Passwords use salted scrypt hashes. Failed sign-ins and registration attempts have persisted rate limits. Sign in from the home page using the organizer username and password; the legacy `/admin` password form is a separate site-owner login. Password recovery, email verification, username changes and Google sign-in are not included. The registration screen tells users to retain their credentials.
 
 Each group has its own party list, deadline, players, predictions, results, scoreboard and audit rows. Participant names need only be unique within a group. Cookies and server checks prevent participant sessions or legacy group-admin sessions from being reused across groups. Personal recovery links and sharing/navigation retain the group code. Anyone holding a group's invitation can join it while open and see participant names/status; submitted predictions become visible at closing. Invitations are not a verified-membership system.
 
