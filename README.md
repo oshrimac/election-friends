@@ -1,6 +1,6 @@
 # הקלפי — Election Friends
 
-A Hebrew, right-to-left election prediction game for one group of friends. This version replaces the browser-only prototype with a server, persistent PostgreSQL data, private participant access, an admin screen, and public results and rankings.
+A Hebrew, right-to-left election prediction game for independent groups of friends. This version replaces the browser-only prototype with a server, persistent PostgreSQL data, private participant access, an admin screen, and public results and rankings.
 
 ## What works
 
@@ -52,7 +52,7 @@ Publishing cannot be completed by uploading only `index.html`: the API and datab
 3. In the project's Storage / Marketplace area, provision a PostgreSQL database (Neon is a suitable choice) and connect it to the project. The app reads `DATABASE_URL`. Use the provider's TLS-enabled, pooled connection URL. Confirm you are connecting the intended production database.
 4. Run `npm run admin:password` on your own computer. Store the resulting value as a **secret environment variable** named `ADMIN_PASSWORD_HASH` in Vercel. Do not use the original password as this variable. Keep the plaintext password in your password manager.
 5. Ensure both `DATABASE_URL` and `ADMIN_PASSWORD_HASH` are set for the deployment's environment. Use a **separate database** for Preview; do not connect unreviewed preview code to the production database.
-6. Deploy. The initial request creates the version-one schema inside a transaction protected by a PostgreSQL advisory lock. No destructive migration or seed data runs. The database user needs schema creation permission on first start.
+6. Deploy. The initial request creates or upgrades the schema inside a transaction protected by a PostgreSQL advisory lock. The v2 upgrade preserves existing rows and assigns them to the original group; it removes the singleton restriction and replaces globally unique participant names with names unique within each group. No participant data is deleted or seeded. The database user needs schema creation permission on first start.
 7. Open the published `/admin`, sign in, set your group title, party list and future closing time, and save. The date/time input uses your device's timezone; the saved deadline is also displayed in Israel time for confirmation.
 8. Make sure the **production URL is accessible to anyone with the link**, rather than protected by a Vercel sign-in gate. The app's admin screen remains password protected.
 9. Test from two browsers/devices: join under distinct names, submit 120 seats, verify predictions are hidden before closing. Use a separate test deployment/database to exercise locking and results publication.
@@ -68,6 +68,25 @@ npx vercel --prod
 ```
 
 Select your intended workspace and project. Configure the database and environment secrets before deploying. Deploying does not itself configure the game or make an unprovisioned database work.
+
+## Independent friend groups
+
+The existing home URL and `/admin` remain the original group. Existing participants, predictions, results, personal links and admin sessions remain valid. `DATABASE_URL` and `ADMIN_PASSWORD_HASH` are unchanged.
+
+1. Sign in at the original `/admin` with the existing site-owner password.
+2. In **עוד פרלמנט, קישור משלו**, enter the new group's title and a new administrator password (16–256 characters). Store it privately; only its scrypt hash is stored in the database.
+3. Press **פתיחת קבוצה נפרדת**. The new group appears under **הקבוצות שפתחתם**, with its shareable participant link and a management link.
+4. Open its management link, sign in using that group's password, then configure parties and closing time before sharing.
+
+Participant URL: `/?group=<random-group-code>`
+Admin URL: `/admin?group=<random-group-code>`
+Scoreboard: `/?group=<random-group-code>#ranking`
+
+Each group has its own party list, deadline, players, predictions, results, scoreboard, audit rows and admin sessions. Participant names need only be unique within a group. Cookies are scoped by group name, so the same browser can participate in and administer several groups. Personal recovery links and all sharing/navigation retain the group code. Requests with unknown or malformed group codes return 404 rather than falling back to the original group. The original site-owner password is not a login password for new groups.
+
+Only the authenticated site owner in the original group can create groups or see the list of groups. Group administrators cannot create or list other groups. Anyone holding a group's participant link can join it while open and see its participant names/status; submitted predictions become visible at closing. Links are invitation links, not verified membership or an account system.
+
+Deployment: publish the new commit using the existing Vercel settings. First API use performs the idempotent v2 database upgrade within the existing advisory-lock transaction. The database role must have permission to alter existing app tables and create a sequence/indexes. No new environment variables are required. Keep the current Vercel framework preset **Other**.
 
 ## Your admin workflow
 
@@ -104,8 +123,8 @@ Both vectors must total 120. A perfect prediction scores 120. Ties share the sam
 - The database is the source of truth. Vercel function memory, localStorage and browser-selected players are not used for shared data or permissions.
 - Keep provider backups enabled as appropriate. CSV exports are reports, not database backups. Future schema changes should use reviewed additive migrations.
 - Rotating `ADMIN_PASSWORD_HASH` changes the password for new logins. Existing admin sessions remain valid until expiration; to revoke immediately, clear `ballot_admin_sessions` through an authenticated database console.
-- Participant cookies last one year. Their private recovery tokens remain valid until removed/replaced in the database. There is no automated email recovery, multi-group management or reset button; this build intentionally manages one group/election per database.
-- Do not reuse a live database for an unrelated election. Provision a new project/database to preserve past predictions and reports.
+- Participant cookies last one year. Their private recovery tokens remain valid until removed/replaced in the database. There is no automated email recovery or reset button. Each group manages its own election and keeps its own predictions and results.
+- For a new election, create a new group to preserve previous predictions and reports. Do not repurpose a group with existing participants.
 
 ## Verification
 
@@ -114,10 +133,11 @@ npm run build
 npm test
 ```
 
-Seven automated tests pass. They cover the full lifecycle with real embedded PostgreSQL, two independent participant sessions, cross-device token recovery, deadline enforcement, unauthorized writes, private pre-close data, malformed submissions, ties, corrected results, failed-login rate limits, HTTP cookies / CSRF checks, concurrent locking, and the UI → API → database → shared report flow in separate simulated DOM clients.
+Nine automated tests cover the original lifecycle and multiple-group isolation. They cover the full lifecycle with real embedded PostgreSQL, two independent participant sessions, cross-device token recovery, deadline enforcement, unauthorized writes, private pre-close data, malformed submissions, ties, corrected results, failed-login rate limits, HTTP cookies / CSRF checks, concurrent locking, and the UI → API → database → shared report flow in separate simulated DOM clients.
 
 `npm audit --omit=dev` reported zero vulnerabilities during preparation.
 
 **Not yet verified:** a live Vercel build, the external PostgreSQL connection, production-domain/cookie behavior and a two-device public URL check. Those depend on workspace access and production provisioning. A Chromium visual check was attempted, but the available browser could not reach the local server; automated DOM tests are not a substitute for visual / mobile browser QA.
 
 Original prototype: `docs/prototype.html`. Original README: `docs/README.original.md`. These are historical references, not the production entry point.
+

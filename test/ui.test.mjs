@@ -26,16 +26,17 @@ test('independent DOM clients: configure → join → save → recover → lock 
  const p=await client();field(p,'#player-name','נועה');submit(p,'#join-form');await until(()=>p.window.document.querySelector('#submit'));
  const recovery=p.window.document.querySelector('#recovery-url').value;assert.match(recovery,/#access=/);
  for(const [i,v] of [60,50,10].entries())field(p,`[data-seat="${i}"]`,String(v));
- assert.equal(p.window.document.querySelector('#seat-total').textContent,'120');assert.equal(p.window.document.querySelector('#submit').disabled,false);click(p,'#submit');await until(()=>p.window.document.querySelector('#save-status')?.textContent.includes('נשמר בשרת'));
+ assert.equal(p.window.document.querySelector('#seat-total').textContent,'120');assert.equal(p.window.document.querySelector('#submit').disabled,false);click(p,'#submit');await until(()=>p.window.document.querySelector('#save-status')?.textContent.includes('יש קבלות מ־'));
  const p2=await client();field(p2,'#player-name','איתי');submit(p2,'#join-form');await until(()=>p2.window.document.querySelector('#submit'));
- for(const [i,v] of [58,52,10].entries())field(p2,`[data-seat="${i}"]`,String(v));click(p2,'#submit');await until(()=>p2.window.document.querySelector('#save-status')?.textContent.includes('נשמר בשרת'));
+ for(const [i,v] of [58,52,10].entries())field(p2,`[data-seat="${i}"]`,String(v));click(p2,'#submit');await until(()=>p2.window.document.querySelector('#save-status')?.textContent.includes('יש קבלות מ־'));
  const spectator=await client('/#ranking');assert.equal(spectator.window.document.querySelector('details'),null);assert.match(spectator.window.document.body.textContent,/נועה/);
  const recovered=await client('/'+new URL(recovery).hash);await until(()=>recovered.window.document.querySelector('#submit'));assert.match(recovered.window.document.querySelector('h1').textContent,/נועה/);assert.equal(recovered.window.location.hash,'');assert.equal(recovered.window.document.querySelector('[data-seat="0"]').value,'60');
  click(a,'#lock');await until(()=>a.window.document.querySelector('#lock')?.textContent==='פתיחה מחדש');
  for(const [i,v] of [60,50,10].entries())field(a,`[data-seat="${i}"]`,String(v));field(a,'#results-note','תוצאות בדיקת ממשק');click(a,'#publish');await until(()=>a.window.document.querySelector('#download-report'));
  assert.match(a.window.document.body.textContent,/120/);assert.match(a.window.document.body.textContent,/118/);
- const report=await client('/#ranking');const body=report.window.document.body.textContent;assert.match(body,/דוח התוצאות/);assert.match(body,/נועה/);assert.match(body,/איתי/);assert.equal(report.window.document.querySelectorAll('details').length,2);assert.equal(report.window.document.querySelector('#publish'),null);
+ const report=await client('/#ranking');const body=report.window.document.body.textContent;assert.match(body,/יש קבלות/);assert.match(body,/נועה/);assert.match(body,/איתי/);assert.equal(report.window.document.querySelectorAll('details').length,2);assert.equal(report.window.document.querySelector('#publish'),null);
  const locked=await client('/'+new URL(recovery).hash);await until(()=>locked.window.document.querySelector('#submit'));assert.equal(locked.window.document.querySelector('#submit').disabled,true);assert.equal(locked.window.document.querySelector('[data-seat]'),null);
  assert.deepEqual(errors,[]);
  } finally {for(const c of clients)c.window.close();await new Promise(r=>server.close(r));await (await getDb()).close();await rm(dir,{recursive:true,force:true});}
 });
+

@@ -19,3 +19,19 @@ CREATE TABLE IF NOT EXISTS ballot_rate_limits (
 CREATE TABLE IF NOT EXISTS ballot_audit (
  id bigserial PRIMARY KEY, action text NOT NULL, detail jsonb NOT NULL DEFAULT '{}', created_at timestamptz NOT NULL DEFAULT now()
 );
+
+
+-- Additive v2 migration: retain the original group and all existing predictions.
+ALTER TABLE ballot_game DROP CONSTRAINT IF EXISTS ballot_game_id_check;
+CREATE SEQUENCE IF NOT EXISTS ballot_group_ids START WITH 2;
+ALTER TABLE ballot_game ALTER COLUMN id SET DEFAULT nextval('ballot_group_ids');
+ALTER TABLE ballot_game ADD COLUMN IF NOT EXISTS slug text;
+UPDATE ballot_game SET slug='default' WHERE id=1 AND slug IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ballot_game_slug_unique ON ballot_game(slug);
+ALTER TABLE ballot_game ADD COLUMN IF NOT EXISTS admin_password_hash text;
+ALTER TABLE ballot_players ADD COLUMN IF NOT EXISTS group_id integer NOT NULL DEFAULT 1 REFERENCES ballot_game(id);
+ALTER TABLE ballot_players DROP CONSTRAINT IF EXISTS ballot_players_name_key_key;
+CREATE UNIQUE INDEX IF NOT EXISTS ballot_players_group_name ON ballot_players(group_id,name_key);
+ALTER TABLE ballot_admin_sessions ADD COLUMN IF NOT EXISTS group_id integer NOT NULL DEFAULT 1 REFERENCES ballot_game(id);
+CREATE INDEX IF NOT EXISTS ballot_admin_sessions_group ON ballot_admin_sessions(group_id);
+ALTER TABLE ballot_audit ADD COLUMN IF NOT EXISTS group_id integer NOT NULL DEFAULT 1 REFERENCES ballot_game(id);

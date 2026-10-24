@@ -2,7 +2,7 @@ import { getDb } from '../lib/db.mjs';
 import { createService, AppError } from '../lib/service.mjs';
 const cookieName=process.env.VERCEL||process.env.NODE_ENV==='production'?'__Host-ballot':'ballot';
 function cookies(req) {const result={};for(const part of (req.headers.cookie||'').split(';')) {const at=part.indexOf('=');if(at>0) result[part.slice(0,at).trim()]=part.slice(at+1).trim();}return result;}
-function setCookie(res,name,value,age) {res.setHeader('Set-Cookie',`${cookieName}-${name}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${cookieName.startsWith('__Host-')?'; Secure':''}`);}
+function setCookie(res,name,value,age,groupId) {res.setHeader('Set-Cookie',`${cookieName}${groupId===1?'':'-g'+groupId}-${name}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${cookieName.startsWith('__Host-')?'; Secure':''}`);}
 export default async function handler(req,res) {
  res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('X-Content-Type-Options','nosniff');
  const send=(code,data)=>{res.statusCode=code;res.end(JSON.stringify(data));};
@@ -23,17 +23,24 @@ export default async function handler(req,res) {
    else {let data='';for await (const chunk of req) {data+=chunk;if(Buffer.byteLength(data)>16384) throw new AppError(413,'בקשה גדולה מדי');}try {body=JSON.parse(data);} catch {throw new AppError(400,'JSON אינו תקין');}}
    if(!body||typeof body!=='object'||Array.isArray(body)) throw new AppError(400,'בקשה לא תקינה');
   }
-  const c=cookies(req),auth={player:c[cookieName+'-player'],admin:c[cookieName+'-admin']};
-  const svc=createService(await getDb());
+  const slug=requestUrl.searchParams.get('group')??'default';
+  if(requestUrl.searchParams.getAll('group').length>1||!(/^[A-Za-z0-9_-]{24}$/.test(slug)||slug==='default')) throw new AppError(404,'הקבוצה לא נמצאה. בדקו את הקישור שקיבלתם');
+  const db=await getDb();
+  const group=(await db.query('SELECT id FROM ballot_game WHERE slug=$1',[slug])).rows[0];
+  if(!group) throw new AppError(404,'הקבוצה לא נמצאה. בדקו את הקישור שקיבלתם');
+  const groupId=group.id,cookiePrefix=cookieName+(groupId===1?'':'-g'+groupId);
+  const c=cookies(req),auth={player:c[cookiePrefix+'-player'],admin:c[cookiePrefix+'-admin']};
+  const svc=createService(db,{groupId});
   const ip=process.env.VERCEL?(req.headers['x-real-ip']||'unknown'):req.socket?.remoteAddress||'local';
   let result;
   if(path==='/api/state'&&req.method==='GET') result=await svc.read(auth);
-  else if(path==='/api/join'&&req.method==='POST') {result=await svc.join(body,ip);setCookie(res,'player',result.token,31536000);}
-  else if(path==='/api/recover'&&req.method==='POST') {result=await svc.recover(body,ip);setCookie(res,'player',result.token,31536000);result={ok:true};}
+  else if(path==='/api/join'&&req.method==='POST') {result=await svc.join(body,ip);setCookie(res,'player',result.token,31536000,groupId);}
+  else if(path==='/api/recover'&&req.method==='POST') {result=await svc.recover(body,ip);setCookie(res,'player',result.token,31536000,groupId);result={ok:true};}
   else if(path==='/api/personal-link'&&req.method==='POST') result=await svc.personalLink(auth);
   else if(path==='/api/prediction'&&req.method==='PUT') result=await svc.predict(body,auth);
-  else if(path==='/api/admin/login'&&req.method==='POST') {result=await svc.login(body,ip);setCookie(res,'admin',result.token,28800);result={ok:true};}
-  else if(path==='/api/admin/logout'&&req.method==='POST') {result=await svc.logout(auth);setCookie(res,'admin','',0);}
+  else if(path==='/api/admin/login'&&req.method==='POST') {result=await svc.login(body,ip);setCookie(res,'admin',result.token,28800,groupId);result={ok:true};}
+  else if(path==='/api/admin/logout'&&req.method==='POST') {result=await svc.logout(auth);setCookie(res,'admin','',0,groupId);}
+  else if(path==='/api/admin/groups'&&req.method==='POST') result=await svc.createGroup(body,auth,ip);
   else if(path==='/api/admin/settings'&&req.method==='PUT') result=await svc.configure(body,auth);
   else if(path==='/api/admin/lock'&&req.method==='PUT') result=await svc.lock(body,auth);
   else if(path==='/api/admin/results'&&req.method==='PUT') result=await svc.results(body,auth);
@@ -45,3 +52,4 @@ export default async function handler(req,res) {
   else {console.error('ballot_api_error',e.code||e.name);send(503,{error:'השרת או מסד הנתונים אינם זמינים. נסו שוב; מנהל האתר יכול לבדוק את ההגדרות והיומנים.'});}
  }
 }
+
