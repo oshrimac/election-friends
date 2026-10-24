@@ -9,7 +9,7 @@ A Hebrew, right-to-left election prediction game with organizer accounts and ind
 - Each prediction must contain whole numbers from 0 to 120 and total exactly 120 seats. The server validates every submission.
 - Submissions can be edited until the deadline or an early admin lock. Other participants' predictions are hidden by the API until closing.
 - The deadline is enforced by the server on every request; no scheduled task is necessary.
-- `/admin` has a separate password-protected session. The admin configures the group, parties, deadline, early lock, and actual results.
+- `/admin` has a separate password-protected session. Group admins configure the group title, deadline and early lock. Only the central administrator approves party-name mappings and publishes actual results to all groups.
 - Publishing results computes the shared scoreboard from database predictions. Corrections recalculate all scores and are recorded in an audit table.
 - Anyone with the group URL can see published results, the scoreboard, and per-party prediction comparisons. The report supports CSV export and printing / Save as PDF.
 - Read-only results and scoreboard screens refresh every 15 seconds. A refresh button updates other screens.
@@ -37,9 +37,9 @@ Do not run that line as a shell command; the dollar signs are literal. Do not co
 npm run dev
 ```
 
-Open `http://localhost:3000/admin`, sign in, configure the group, then open `http://localhost:3000/` to join.
+Open `http://localhost:3000/admin`, sign in, review the fixed slate and configure the group deadline, then open `http://localhost:3000/` to join.
 
-Without `DATABASE_URL`, local development uses a real embedded PostgreSQL engine (PGlite), persisted in `.data/ballot`. It starts empty; there are no demo participants or fake predictions. The suggested party names in setup are **examples**, not a verified current election slate. Replace them before inviting friends.
+Without `DATABASE_URL`, local development uses a real embedded PostgreSQL engine (PGlite), persisted in `.data/ballot`. It starts empty; there are no demo participants or fake predictions. The fixed default slate is the 14-party list supplied by the site owner. Group administrators cannot edit it.
 
 The app deliberately refuses a local database fallback on Vercel or when `NODE_ENV=production`. Production requires a PostgreSQL connection.
 
@@ -53,7 +53,7 @@ Publishing cannot be completed by uploading only `index.html`: the API and datab
 4. Run `npm run admin:password` on your own computer. Store the resulting value as a **secret environment variable** named `ADMIN_PASSWORD_HASH` in Vercel. Do not use the original password as this variable. Keep the plaintext password in your password manager.
 5. Ensure both `DATABASE_URL` and `ADMIN_PASSWORD_HASH` are set for the deployment's environment. Use a **separate database** for Preview; do not connect unreviewed preview code to the production database.
 6. Deploy. The initial request creates or upgrades the schema inside a transaction protected by a PostgreSQL advisory lock. The v2 upgrade preserves existing rows and assigns them to the original group; it removes the singleton restriction and replaces globally unique participant names with names unique within each group. No participant data is deleted or seeded. The database user needs schema creation permission on first start.
-7. Open the published `/admin`, sign in, set your group title, party list and future closing time, and save. The date/time input uses your device's timezone; the saved deadline is also displayed in Israel time for confirmation.
+7. Open the published `/admin`, sign in, set your group title and closing time, review the fixed party list, and save. The date/time input uses your device's timezone; the saved deadline is also displayed in Israel time for confirmation.
 8. Make sure the **production URL is accessible to anyone with the link**, rather than protected by a Vercel sign-in gate. The app's admin screen remains password protected.
 9. Test from two browsers/devices: join under distinct names, submit 120 seats, verify predictions are hidden before closing. Use a separate test deployment/database to exercise locking and results publication.
 10. Share the production home URL. Keep your admin password and every participant's personal link private.
@@ -75,7 +75,7 @@ Anyone can open the home URL, choose **הרשמה**, and create an organizer acc
 
 1. Open `/`, register or sign in, and enter a group title under **פתיחת קבוצה**.
 2. The group is owned by the signed-in account. Open **ניהול הקבוצה**; no separate group password is needed.
-3. Set the party list and closing time before sharing the participant invitation link.
+3. Review the fixed party list and set the closing time before sharing the participant invitation link.
 4. Friends open the invitation, enter a display name, and save their prediction. They do not need an account, and the invitation grants no administrator rights.
 5. Return to `/` and sign in to find your groups on another device. An account lists only its own groups. Each group checks ownership server-side on every administrative action.
 
@@ -85,7 +85,7 @@ Scoreboard: `/?group=<random-group-code>#ranking`
 
 An organizer may also join their group as a participant; the organizer account and the private participant session are separate. A different logged-in organizer remains an ordinary guest in groups they do not own. Account sign-out revokes that session across all owned groups; participant sessions remain separate. Account sessions last eight hours, use random 256-bit tokens stored as SHA-256 hashes, and are sent in HttpOnly / SameSite cookies (Secure in production). Passwords use salted scrypt hashes. Failed sign-ins and registration attempts have persisted rate limits. Sign in from the home page using the organizer username and password; the legacy `/admin` password form is a separate site-owner login. Password recovery, email verification, username changes and Google sign-in are not included. The registration screen tells users to retain their credentials.
 
-Each group has its own party list, deadline, players, predictions, results, scoreboard and audit rows. Participant names need only be unique within a group. Cookies and server checks prevent participant sessions or legacy group-admin sessions from being reused across groups. Personal recovery links and sharing/navigation retain the group code. Anyone holding a group's invitation can join it while open and see participant names/status; submitted predictions become visible at closing. Invitations are not a verified-membership system.
+Each group has its own deadline, players, predictions, scoreboard and audit rows. The party slate and actual election results are managed centrally. Participant names need only be unique within a group. Cookies and server checks prevent participant sessions or legacy group-admin sessions from being reused across groups. Personal recovery links and sharing/navigation retain the group code. Anyone holding a group's invitation can join it while open and see participant names/status; submitted predictions become visible at closing. Invitations are not a verified-membership system.
 
 ### Existing groups and site-owner access
 
@@ -95,17 +95,29 @@ The site owner's legacy group-creation screen remains available in `/admin` for 
 
 ### Deployment
 
-Publish the commit using the existing Vercel settings, framework preset **Other**. No new environment variables or packages are required. `DATABASE_URL` is required; existing `ADMIN_PASSWORD_HASH` remains unchanged for legacy access. Initial API use performs idempotent v2/v3 schema upgrades under the database advisory lock. They preserve existing groups and predictions while adding account/session tables and nullable group ownership. The database role needs table, sequence and index creation/alteration permissions. All group API calls require an explicit group code; account endpoints are intentionally independent of a group.
+Publish the commit using the existing Vercel settings, framework preset **Other**. No new environment variables or packages are required. `DATABASE_URL` is required; existing `ADMIN_PASSWORD_HASH` remains unchanged for legacy access. Initial API use performs idempotent v2/v3/v4 schema upgrades under the database advisory lock. They preserve existing groups and predictions while adding account/session tables and nullable group ownership. The database role needs table, sequence and index creation/alteration permissions. All group API calls require an explicit group code; account endpoints are intentionally independent of a group.
 
-## Your admin workflow
+## Group administration and central election results
 
-1. Go to `/admin` and sign in. Admin sessions expire after eight hours.
-2. Before inviting anyone: configure the parties and deadline. Party names become fixed when the first participant joins; entries are never silently reset.
-3. You can move the deadline while predictions remain open. Once closed, the deadline cannot be changed. You can manually reopen an early lock only before the deadline and before results publication. Reopening cannot undo the fact that friends may already have seen predictions.
-4. After the election, wait for automatic closing or press **נעילה עכשיו**. Closing reveals submitted predictions.
-5. Enter actual seats totaling 120, optionally add the results source / note, and press **פרסום תוצאות ודירוג**. Everyone can view the report at `/#ranking`.
-6. If needed, return to `/admin` and publish corrected results. Predictions remain locked, rankings recalculate, and the correction is recorded in the database audit log.
-7. Export CSV or use **הדפסה / שמירה כ-PDF** from the scoreboard.
+New groups start with the 14-party slate supplied by the site owner and a closing-time default of **27 October 2026, 00:05 Israel time** (`2026-10-26T22:05:00Z`). The default is stored by the server when creating a group. Existing deadlines are not overwritten. Group owners may set the group title and closing time and lock predictions early; they cannot change the party slate or publish actual results. Both the UI and API enforce these restrictions.
+
+Existing groups retain their original party arrays and saved predictions, but their party lists are now read-only too. Empty unconfigured groups receive the central default slate during migration. A group may not change an existing nonempty slate.
+
+### Central administrator
+
+The central administrator signs in at `/admin` with the existing site-owner password from `ADMIN_PASSWORD_HASH`. Signing up for an ordinary organizer account never grants this role, even if that account's username is “admin”. Legacy per-group admin passwords also grant no central authority.
+
+The central result panel:
+- Shows all distinct party labels from every group and the groups using each label, including differences in punctuation or wording.
+- Lets the central admin map each original label to one of the 14 central parties or explicitly mark it **לא מתמודדת — 0 מנדטים**. Unknown names block saving/publication until resolved.
+- Prefills the four aliases approved by the site owner: `ש״ס → ש"ס`, `רע״מ → רע"מ`, `הציונות הדתית → הציונות הדתית + זהות`, and `המילואימניקים/כלכלית → המילואימניקים והכלכלית`.
+- Offers **אישור ושמירת ההתאמות בלבד** before publication. This saves name approvals without closing voting or publishing results.
+- Publishes a single actual-seat vector totaling 120, with an optional source/note, to every group. Publication locks voting globally, including groups created afterward. No group owner can reopen voting after central publication.
+- Supports corrected results with version checks and an audit record. Corrections recompute every group's scoreboard from its original predictions. After publication, changing name mappings requires a full corrected publication.
+
+Projection aligns predictions by approved party identity, never by position. When multiple old labels map to one central party their predicted seats are added. Labels explicitly marked non-contesting retain their original prediction in that group's report and receive zero actual seats. Raw participant predictions and original party arrays are never rewritten. Participant names and predictions remain isolated by group.
+
+The global results and mappings live in `ballot_election`. Group reads/submissions acquire a shared PostgreSQL advisory lock, and central publication takes the exclusive lock, so a prediction cannot race through publication. Group pages check for central publications/corrections every 15 seconds; results and rankings refresh automatically.
 
 ## Participant workflow
 
@@ -142,7 +154,7 @@ npm run build
 npm test
 ```
 
-Ten automated tests cover organizer signup/signin/signout, group ownership, guest access, migration preservation, the original lifecycle and multiple-group isolation. They cover the full lifecycle with real embedded PostgreSQL, two independent participant sessions, cross-device token recovery, deadline enforcement, unauthorized writes, private pre-close data, malformed submissions, ties, corrected results, failed-login rate limits, HTTP cookies / CSRF checks, concurrent locking, and the UI → API → database → shared report flow in separate simulated DOM clients.
+Eleven automated tests cover central-only results, all-group publication/corrections, approved alias mapping, slate immutability, the Israel-time deadline, organizer signup/signin/signout, group ownership, guest access, migration preservation, the original lifecycle and multiple-group isolation. They cover the full lifecycle with real embedded PostgreSQL, two independent participant sessions, cross-device token recovery, deadline enforcement, unauthorized writes, private pre-close data, malformed submissions, ties, corrected results, failed-login rate limits, HTTP cookies / CSRF checks, concurrent locking, and the UI → API → database → shared report flow in separate simulated DOM clients.
 
 `npm audit --omit=dev` reported zero vulnerabilities during preparation.
 

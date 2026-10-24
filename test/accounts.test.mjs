@@ -1,3 +1,4 @@
+import {DEFAULT_PARTIES} from '../lib/election.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -65,15 +66,17 @@ test('public organizer accounts own groups; invited guests never gain administra
   let state=await ok(a,'state'+scope);assert.equal(state.isAdmin,true);assert.equal(state.accountManaged,true);
   assert.equal((await ok(b,'state'+scope)).isAdmin,false);
   assert.equal((await ok(guest,'state'+scope)).isAdmin,false);
-  const settings={version:state.version,title:'של אלפא',parties:['א','ב'],deadline:new Date(Date.now()+86400000).toISOString()};
+  const settings={version:state.version,title:'של אלפא',parties:DEFAULT_PARTIES,deadline:new Date(Date.now()+86400000).toISOString()};
   for(const jar of [b,guest])assert.equal((await call(jar,'admin/settings'+scope,'PUT',settings)).status,401);
+  assert.equal((await call(a,'admin/settings'+scope,'PUT',{...settings,parties:['x','y']})).status,403);
+  assert.equal((await ok(a,'state'+scope)).deadline,'2026-10-26T22:05:00.000Z');
   await ok(a,'admin/settings'+scope,'PUT',settings);
   const participant=await ok(guest,'join'+scope,'POST',{name:'חבר חופשי'});
   state=await ok(guest,'state'+scope);
-  await ok(guest,'prediction'+scope,'PUT',{version:state.version,prediction:[80,40],owner_id:ua.id});
-  for(const action of ['lock','results']){
-   assert.equal((await call(guest,'admin/'+action+scope,'PUT',{version:state.version,locked:true,actual:[80,40]})).status,401);
-   assert.equal((await call(b,'admin/'+action+scope,'PUT',{version:state.version,locked:true,actual:[80,40]})).status,401);
+  await ok(guest,'prediction'+scope,'PUT',{version:state.version,prediction:[80,40,...Array(12).fill(0)],owner_id:ua.id});
+  for(const action of ['lock','results','mapping']){
+   assert.equal((await call(guest,'admin/'+action+scope,'PUT',{version:state.version,locked:true,actual:[80,40]})).status,action!=='lock'?403:401);
+   assert.equal((await call(b,'admin/'+action+scope,'PUT',{version:state.version,locked:true,actual:[80,40]})).status,action!=='lock'?403:401);
   }
   const publicState=await ok(guest,'state'+scope);
   assert.equal(publicState.owner_id,undefined);assert.equal(publicState.admin_password_hash,undefined);assert.equal(publicState.groups,undefined);

@@ -57,6 +57,7 @@ export default async function handler(req,res) {
   else if(path==='/api/admin/groups'&&req.method==='POST') result=await svc.createGroup(body,auth,ip);
   else if(path==='/api/admin/settings'&&req.method==='PUT') result=await svc.configure(body,auth);
   else if(path==='/api/admin/lock'&&req.method==='PUT') result=await svc.lock(body,auth);
+  else if(path==='/api/admin/mapping'&&req.method==='PUT') result=await svc.saveMapping(body,auth);
   else if(path==='/api/admin/results'&&req.method==='PUT') result=await svc.results(body,auth);
   else throw new AppError(404,'הפעולה לא נמצאה');
   send(200,result);

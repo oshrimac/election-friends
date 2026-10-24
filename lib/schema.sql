@@ -48,3 +48,17 @@ CREATE TABLE IF NOT EXISTS ballot_user_sessions (
 CREATE INDEX IF NOT EXISTS ballot_user_sessions_user ON ballot_user_sessions(user_id);
 ALTER TABLE ballot_game ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES ballot_users(id);
 CREATE INDEX IF NOT EXISTS ballot_game_owner ON ballot_game(owner_id);
+
+-- v4: new-group deadline and a single central result source. Existing rows stay intact.
+ALTER TABLE ballot_game ALTER COLUMN deadline SET DEFAULT '2026-10-26T22:05:00.000Z';
+CREATE TABLE IF NOT EXISTS ballot_election (
+ id integer PRIMARY KEY CHECK(id=1), parties jsonb NOT NULL DEFAULT '[]',
+ actual jsonb, note text NOT NULL DEFAULT '', published boolean NOT NULL DEFAULT false,
+ published_at timestamptz, version integer NOT NULL DEFAULT 0
+);
+INSERT INTO ballot_election(id) VALUES(1) ON CONFLICT DO NOTHING;
+-- Only groups created from this version get a centrally fixed slate.
+ALTER TABLE ballot_game ADD COLUMN IF NOT EXISTS slate_fixed boolean NOT NULL DEFAULT false;
+ALTER TABLE ballot_election ADD COLUMN IF NOT EXISTS mapping jsonb NOT NULL DEFAULT '[]';
+
+UPDATE ballot_game SET parties='["ישר", "הליכוד", "ביחד", "הדמוקרטים", "הרשימה המשותפת", "ישראל ביתנו", "עוצמה יהודית", "יהדות התורה", "ש\"ס", "הציונות הדתית + זהות", "רע\"מ", "המילואימניקים והכלכלית", "עמך ישראל", "הציבור החרדי"]'::jsonb WHERE configured=false AND parties='[]'::jsonb;

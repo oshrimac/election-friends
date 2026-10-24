@@ -22,7 +22,9 @@ test('independent DOM clients: configure → join → save → recover → lock 
  function click(d,id){d.window.document.querySelector(id).click();}
  async function login(d){field(d,'#admin-password',password);submit(d,'#login-form');await until(()=>d.window.document.querySelector('#settings-form'));}
  try {
- const a=await client('/admin');await login(a);field(a,'#group-title','החברים מהבדיקה');field(a,'#party-names','רשימה א\nרשימה ב\nרשימה ג');field(a,'#close-time',new Date(Date.now()+86400000).toISOString().slice(0,16));submit(a,'#settings-form');await until(()=>a.window.document.querySelector('#publish'));
+ const a=await client('/admin');await login(a);field(a,'#group-title','החברים מהבדיקה');assert.equal(a.window.document.querySelector('#party-names').readOnly,true);field(a,'#close-time',new Date(Date.now()+86400000).toISOString().slice(0,16));submit(a,'#settings-form');await until(()=>a.window.document.querySelector('#publish'));
+ click(a,'#save-mapping');await until(()=>a.window.document.querySelector('#save-mapping')?.disabled===false);
+ assert.equal((await (await getDb()).query('SELECT published FROM ballot_election WHERE id=1')).rows[0].published,false);
  const p=await client();field(p,'#player-name','נועה');submit(p,'#join-form');await until(()=>p.window.document.querySelector('#submit'));
  const recovery=p.window.document.querySelector('#recovery-url').value;assert.match(recovery,/#access=/);
  for(const [i,v] of [60,50,10].entries())field(p,`[data-seat="${i}"]`,String(v));

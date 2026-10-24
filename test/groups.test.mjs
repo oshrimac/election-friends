@@ -1,3 +1,4 @@
+import {DEFAULT_PARTIES} from '../lib/election.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile,mkdtemp,rm} from 'node:fs/promises';
@@ -78,7 +79,7 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   await ok('admin/login','POST',{password:passA},a.slug);
   await ok('admin/login','POST',{password:passB},b.slug);
   assert.equal((await request('admin/groups','POST',{title:'denied',password:passA},a.slug)).status,403);
-  for(const [group,parties] of [[a,['א1','א2']],[b,['ב1','ב2']]]){
+  for(const [group,parties] of [[a,DEFAULT_PARTIES],[b,DEFAULT_PARTIES]]){
    const s=await ok('state','GET',null,group.slug);
    assert.equal(s.groups,undefined);
    await ok('admin/settings','PUT',{version:s.version,title:group.title,parties,deadline:new Date(Date.now()+86400000).toISOString()},group.slug);
@@ -86,13 +87,13 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   const pa=await ok('join','POST',{name:'אותו שם'},a.slug),pb=await ok('join','POST',{name:'אותו שם'},b.slug);
   let sa=await ok('state','GET',null,a.slug),sb=await ok('state','GET',null,b.slug);
   assert.equal(sa.players.length,1);assert.equal(sb.players.length,1);assert.notEqual(sa.me.id,sb.me.id);
-  await ok('prediction','PUT',{version:sa.version,prediction:[70,50]},a.slug);
-  await ok('prediction','PUT',{version:sb.version,prediction:[20,100]},b.slug);
+  await ok('prediction','PUT',{version:sa.version,prediction:[70,50,...Array(12).fill(0)]},a.slug);
+  await ok('prediction','PUT',{version:sb.version,prediction:[20,100,...Array(12).fill(0)]},b.slug);
   assert.equal((await request('recover','POST',{token:pa.token},b.slug)).status,401);
   const serviceB=createService(db,{groupId:gb.id}),serviceA=createService(db,{groupId:ga.id});
   assert.equal((await serviceB.read({player:pa.token})).me,null);
   await assert.rejects(()=>serviceB.personalLink({player:pa.token}),e=>e.status===401);
-  await assert.rejects(()=>serviceB.predict({version:sb.version,prediction:[60,60]},{player:pa.token}),e=>e.status===401);
+  await assert.rejects(()=>serviceB.predict({version:sb.version,prediction:[60,60,...Array(12).fill(0)]},{player:pa.token}),e=>e.status===401);
   const aSession=(await db.query('SELECT token_hash FROM ballot_admin_sessions WHERE group_id=$1',[ga.id])).rows[0];
   assert.ok(aSession);
   // Read actual A token from its group-specific browser cookie; presenting it to B must fail.
@@ -101,13 +102,16 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   assert.equal((await serviceB.read({admin:aCookie.value})).isAdmin,false);
   await ok('admin/lock','PUT',{version:sa.version,locked:true},a.slug);
   sa=await ok('state','GET',null,a.slug);
-  await ok('admin/results','PUT',{version:sa.version,actual:[70,50],note:'רק א'},a.slug);
+  assert.equal((await request('admin/results','PUT',{actual:[120,...Array(13).fill(0)]},a.slug)).status,403);
+  const root=(await ok('state')).central;
+  await ok('admin/results','PUT',{actual:[70,50,...Array(12).fill(0)],parties:root.parties,mapping:root.mappings,electionVersion:root.version,note:'לכולן'},'default');
   sa=await ok('state','GET',null,a.slug);sb=await ok('state','GET',null,b.slug);
-  assert.equal(sa.scoreboard.length,1);assert.equal(sa.scoreboard[0].score,120);
-  assert.equal(sb.published,false);assert.equal(sb.closed,false);assert.equal(sb.actual,null);assert.deepEqual(sb.scoreboard,[]);
-  assert.deepEqual(sb.me.prediction,[20,100]);
-  await ok('prediction','PUT',{version:sb.version,prediction:[30,90]},b.slug);
-  const publicB=await serviceB.read();assert.equal(publicB.players[0].prediction,undefined);assert.equal(publicB.groups,undefined);
+  assert.equal(sa.scoreboard[0].score,120);
+  assert.equal(sb.published,true);assert.equal(sb.closed,true);
+  assert.deepEqual(sb.actual,sa.actual);
+  assert.equal(sb.scoreboard[0].score,70);
+  assert.equal((await request('prediction','PUT',{version:sb.version,prediction:[30,90,...Array(12).fill(0)]},b.slug)).status,409);
+  const publicB=await serviceB.read();assert.deepEqual(publicB.players[0].prediction,[20,100,...Array(12).fill(0)]);assert.equal(publicB.groups,undefined);
   assert.equal((await ok('state')).groups.length,2);
   // Unknown groups must never fall back to the original group.
   for(const slug of ['','missing','x'.repeat(24),'default&group=other']){
@@ -135,7 +139,7 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   const recovered=await ui('/?group='+b.slug+new URL(link).hash);
   await until(()=>recovered.window.document.querySelector('#submit'));
   assert.equal(recovered.window.location.hash,'');
-  assert.equal(recovered.window.document.querySelector('[data-seat="0"]').value,'30');
+  assert.equal(recovered.window.document.querySelector('[data-seat]'),null);
   const owner=await ui('/admin');
   assert.ok(owner.window.document.querySelector('#create-group-form'));
   assert.equal(owner.window.document.querySelectorAll('a[href^="/admin?group="]').length,2);
@@ -151,7 +155,7 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   assert.equal((await ok('state','GET',null,a.slug)).isAdmin,false);
   assert.equal((await ok('state','GET',null,b.slug)).isAdmin,true);
   assert.equal((await ok('state')).isAdmin,true);
-  assert.ok((await db.query('SELECT group_id FROM ballot_audit WHERE action=$1',['publish_results'])).rows.every(x=>x.group_id===ga.id));
+  assert.equal((await db.query('SELECT group_id FROM ballot_audit WHERE action=$1',['central_publish_results'])).rows[0].group_id,1);
  } finally {
   for(const d of clients)d.window.close();
   await new Promise(r=>server.close(r));await db.close();await rm(dir,{recursive:true,force:true});
