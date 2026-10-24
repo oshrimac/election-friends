@@ -6,7 +6,7 @@ const groupUrl=(path='/',hash='')=>location.origin+path+groupQuery+hash;
 const root=document.getElementById('ballot-app'),$=s=>root.querySelector(s);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sum=v=>v.reduce((a,b)=>a+b,0),palette=['#326555','#679c89','#97b5a0','#c1cfa5','#d4b780','#b9946f','#8b9296','#71919e','#a395ac','#b7b9ad'];
-const exampleParties=['הליכוד','יש עתיד','המחנה הממלכתי','ש״ס','ישראל ביתנו','הדמוקרטים','יהדות התורה','הציונות הדתית','עוצמה יהודית','רשימות נוספות'];
+const exampleParties=["ישר","הליכוד","ביחד","הדמוקרטים","הרשימה המשותפת","ישראל ביתנו","עוצמה יהודית","יהדות התורה","ש\"ס","הציונות הדתית + זהות","רע\"מ","המילואימניקים והכלכלית","עמך ישראל","הציבור החרדי"];
 let accountState,accountMode='login';
 let state,tab=location.pathname==='/admin'?'admin':'prediction',draft=[],actual=[],dirty=false,actualDirty=false,busy=false,recoveryLink='',offset=0;
 const fmt=d=>d?new Date(d).toLocaleString('he-IL',{timeZone:'Asia/Jerusalem',dateStyle:'medium',timeStyle:'short'}):'לא הוגדר';
