@@ -1,0 +1,25 @@
+{
+  "name": "election-friends",
+  "version": "1.0.0",
+  "description": "Hebrew election predictions with PostgreSQL, private participant links and admin results",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env.local server.mjs",
+    "start": "node --env-file-if-exists=.env.local server.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "admin:password": "node scripts/password.mjs"
+  },
+  "keywords": [],
+  "type": "module",
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "pg": "^8.23.1"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.3"
+  }
+}
