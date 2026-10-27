@@ -138,17 +138,17 @@ test('two groups: shared browser cookies, scoped admins, predictions, recovery, 
   assert.equal(new URL(report.window.location.href).searchParams.get('group'),a.slug);
   const recovered=await ui('/?group='+b.slug+new URL(link).hash);
   await until(()=>recovered.window.document.querySelector('#submit'));
-  assert.equal(recovered.window.location.hash,'');
+  assert.equal(recovered.window.location.hash,'#prediction');
   assert.equal(recovered.window.document.querySelector('[data-seat]'),null);
   const owner=await ui('/admin');
   assert.ok(owner.window.document.querySelector('#create-group-form'));
-  assert.equal(owner.window.document.querySelectorAll('a[href^="/admin?group="]').length,2);
+  assert.equal(owner.window.document.querySelectorAll('a[href^="/admin?group="]:not([data-tab])').length,2);
   assert.equal(owner.window.document.querySelector('[aria-label="קישור הקבוצה"]').value,origin+'/?group=default');
   const ownerDoc=owner.window.document;
   ownerDoc.querySelector('#new-group-title').value='קבוצה מהממשק';
   ownerDoc.querySelector('#new-group-password').value='group-C-password-123';
   ownerDoc.querySelector('#create-group-form').dispatchEvent(new owner.window.Event('submit',{bubbles:true,cancelable:true}));
-  await until(()=>ownerDoc.querySelectorAll('a[href^="/admin?group="]').length===3);
+  await until(()=>ownerDoc.querySelectorAll('a[href^="/admin?group="]:not([data-tab])').length===3);
   assert.equal(ownerDoc.querySelector('#new-group-password').value,'');
   // Logging out of A leaves B and the original site owner logged in.
   await ok('admin/logout','POST',{},a.slug);

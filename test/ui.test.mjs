@@ -33,7 +33,7 @@ test('independent DOM clients: configure → join → save → recover → lock 
  for(const [i,v] of [58,52,10].entries())field(p2,`[data-seat="${i}"]`,String(v));click(p2,'#submit');await until(()=>p2.window.document.querySelector('#save-status')?.textContent.includes('יש קבלות מ־'));
  const unsubmitted=await client();field(unsubmitted,'#player-name','בלי תחזית');submit(unsubmitted,'#join-form');await until(()=>unsubmitted.window.document.querySelector('#submit'));
  const spectator=await client('/?group=default#ranking');assert.equal(spectator.window.document.querySelector('details'),null);assert.equal(spectator.window.document.querySelector('.comparison-table'),null);assert.match(spectator.window.document.body.textContent,/נועה/);
- const recovered=await client('/'+new URL(recovery).hash);await until(()=>recovered.window.document.querySelector('#submit'));assert.match(recovered.window.document.querySelector('h1').textContent,/נועה/);assert.equal(recovered.window.location.hash,'');assert.equal(recovered.window.document.querySelector('[data-seat="0"]').value,'60');
+ const recovered=await client('/'+new URL(recovery).hash);await until(()=>recovered.window.document.querySelector('#submit'));assert.match(recovered.window.document.querySelector('h1').textContent,/נועה/);assert.equal(recovered.window.location.hash,'#prediction');assert.equal(recovered.window.document.querySelector('[data-seat="0"]').value,'60');
  click(a,'#lock');await until(()=>a.window.document.querySelector('#lock')?.textContent==='פתיחה מחדש');
  for(const [i,v] of [60,50,10].entries())field(a,`[data-seat="${i}"]`,String(v));field(a,'#results-note','תוצאות בדיקת ממשק');click(a,'#publish');await until(()=>a.window.document.querySelector('#download-report'));
  assert.match(a.window.document.body.textContent,/120/);assert.match(a.window.document.body.textContent,/118/);
@@ -48,7 +48,17 @@ test('independent DOM clients: configure → join → save → recover → lock 
  assert.equal(comparisonRows[1].querySelectorAll('td')[1].querySelector('strong').textContent,'58');
  assert.equal(comparisonRows[1].querySelectorAll('td')[1].querySelector('.seat-difference').textContent,'-2');
  assert.equal(comparisonRows[0].querySelectorAll('.exact-hit').length,14);
+ assert.equal(report.window.location.hash,'#ranking');
+ assert.equal(report.window.document.querySelector('[data-tab="ranking"]').getAttribute('aria-current'),'page');
+ for(const name of ['prediction','ranking','results','admin']){const link=report.window.document.querySelector('[data-tab="'+name+'"]');assert.equal(link.tagName,'A');assert.equal(new URL(link.href).searchParams.get('group'),'default');}
  report.window.document.querySelector('[data-tab="results"]').click();assert.ok(report.window.document.querySelector('.comparison-table'));
+ assert.equal(report.window.location.hash,'#results');assert.match(report.window.document.querySelector('h1').textContent,/רגע האמת/);
+ report.window.history.back();await until(()=>report.window.location.hash==='#ranking'&&report.window.document.querySelector('[data-tab="ranking"]').classList.contains('active'));
+ report.window.history.forward();await until(()=>report.window.location.hash==='#results'&&report.window.document.querySelector('[data-tab="results"]').classList.contains('active'));
+ const directResults=await client('/?group=default#results');assert.match(directResults.window.document.querySelector('h1').textContent,/רגע האמת/);
+ assert.equal(directResults.window.document.querySelector('[data-tab="results"]').getAttribute('aria-current'),'page');
+ directResults.window.document.querySelector('[data-tab="prediction"]').click();assert.equal(directResults.window.location.hash,'#prediction');
+ directResults.window.document.querySelector('[data-tab="admin"]').click();assert.equal(directResults.window.location.pathname,'/admin');assert.equal(directResults.window.location.search,'?group=default');assert.ok(directResults.window.document.querySelector('#login-form'));
  assert.deepEqual(errors,[]);
  } finally {for(const c of clients)c.window.close();await new Promise(r=>server.close(r));await (await getDb()).close();await rm(dir,{recursive:true,force:true});}
 });

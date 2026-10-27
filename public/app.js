@@ -8,7 +8,8 @@ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const sum=v=>v.reduce((a,b)=>a+b,0),palette=['#326555','#679c89','#97b5a0','#c1cfa5','#d4b780','#b9946f','#8b9296','#71919e','#a395ac','#b7b9ad'];
 const exampleParties=["ישר","הליכוד","ביחד","הדמוקרטים","הרשימה המשותפת","ישראל ביתנו","עוצמה יהודית","יהדות התורה","ש\"ס","הציונות הדתית + זהות","רע\"מ","המילואימניקים והכלכלית","עמך ישראל","הציבור החרדי"];
 let accountState,accountMode='login';
-let state,tab=location.pathname==='/admin'?'admin':'prediction',draft=[],actual=[],mappingDraft=[],dirty=false,actualDirty=false,busy=false,recoveryLink='',offset=0;
+const tabNames=['prediction','ranking','results','admin'];
+let state,tab=tabFromLocation(),draft=[],actual=[],mappingDraft=[],dirty=false,actualDirty=false,busy=false,recoveryLink='',offset=0;
 const fmt=d=>d?new Date(d).toLocaleString('he-IL',{timeZone:'Asia/Jerusalem',dateStyle:'medium',timeStyle:'short'}):'לא הוגדר';
 function tell(text,error=false){const m=$('#ballot-message');m.textContent=text;m.classList.toggle('error',error);}
 async function api(path,method='GET',body){const r=await fetch('/api/'+path+groupQuery,{method,credentials:'same-origin',headers:method==='GET'?{}:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});let data;try{data=await r.json();}catch{throw new Error('השרת איבד את הספירה. נסו שוב בעוד רגע');}if(!r.ok) throw new Error(data.error||'הפעולה נכשלה');return data;}
@@ -32,6 +33,22 @@ async function accountAction(fn){
  if(busy)return;busy=true;root.querySelectorAll('button').forEach(b=>b.disabled=true);tell('רגע…');
  try{await fn();await loadAccount();tell('סגור.');}catch(e){renderAccount();tell(e.message,true);}finally{busy=false;}
 }
+function tabFromLocation(){const hash=location.hash.slice(1);return location.pathname==='/admin'?'admin':tabNames.includes(hash)?hash:'prediction';}
+function tabUrl(name){return (name==='admin'?'/admin':'/')+groupQuery+(name==='admin'?'':'#'+name);}
+function syncTabLinks(){root.querySelectorAll('[data-tab]').forEach(a=>a.setAttribute('href',tabUrl(a.dataset.tab)));}
+function navigateTab(next){
+ if(!tabNames.includes(next)||next===tab)return;
+ if(tab==='admin'&&actualDirty&&!confirm('יש תוצאות שלא פורסמו. לעבור למסך אחר?'))return;
+ history.pushState({tab:next},'',tabUrl(next));tab=next;tell('');render();
+}
+function restoreTab(){
+ if(!state)return;
+ const next=tabFromLocation();if(next===tab)return;
+ if(tab==='admin'&&actualDirty&&!confirm('יש תוצאות שלא פורסמו. לעבור למסך אחר?')){history.pushState({tab},'',tabUrl(tab));return;}
+ tab=next;tell('');render();
+}
+window.addEventListener('popstate',restoreTab);
+window.addEventListener('hashchange',restoreTab);
 function isClosed(){return state.closed||Date.now()+offset>=Date.parse(state.deadline);}
 async function load(next){const previous=state;state=next||await api('state');offset=Date.parse(state.serverTime)-Date.now();if(!dirty||!previous||previous.version!==state.version||previous.electionVersion!==state.electionVersion||previous.me?.id!==state.me?.id){draft=state.me?.prediction?.slice()||state.parties.map(()=>0);dirty=false;}if(!actualDirty||!previous||previous.version!==state.version||previous.electionVersion!==state.electionVersion){actual=(state.central?.actual||state.adminActual||state.actual||state.parties.map(()=>0)).slice();mappingDraft=state.central?.mappings.map(m=>({...m}))||[];actualDirty=false;}render();}
 const button=(id,text,primary=false,disabled=false)=>`<button type="button" class="btn ${primary?'primary':''}" id="${id}" ${disabled?'disabled':''}>${text}</button>`;
@@ -66,17 +83,20 @@ function centralPanel(){
 }
 function admin(){if(!state.isAdmin&&state.accountManaged)return `<section class="panel"><h1>ניהול הקבוצה</h1><p>רק החשבון שפתח את הקבוצה יכול לנהל אותה. לחברים מספיק קישור ההזמנה כדי למלא תחזית.</p><a class="btn primary" href="/">כניסה לחשבון המנהל</a></section>`;if(!state.isAdmin)return `<section class="panel"><h1>ניהול האתר והקבוצות הישנות</h1><p>נרשמתם עם שם משתמש? <a href="/">כניסה לחשבון מהעמוד הראשי</a>.</p><p>כאן האדמין המרכזי מאשר התאמות שמות ומפרסם תוצאות לכל הקבוצות. יש סיסמה, כי אנחנו מכירים את החבר׳ה.</p><form id="login-form"><label for="admin-password">סיסמת מנהל</label><input class="form-field" id="admin-password" type="password" autocomplete="current-password" required maxlength="256"><button class="btn primary wide" type="submit">תנו לי את הפטיש</button></form></section>`;
 return `<div class="head"><div><h1>לשכת יו״ר הפרלמנט</h1><p>אתם סוגרים את הקלפי. החבר׳ה כבר יפתחו דיון.</p></div>${button('logout','יוצאים מהלשכה')}</div>${groupManagement()}<section class="panel"><h2>לכנס את הפרלמנט</h2><p>את זה שולחים לקבוצה. החבר׳ה יוכלו להצטרף ולצפות — בלי לקבל את המפתחות ללשכה.</p><input class="form-field recovery" aria-label="קישור הקבוצה" readonly value="${esc(groupUrl('/'))}"><div class="actions">${button('share-group','שיתוף / העתקת הקישור')}</div></section><div class="panels"><div><section class="panel"><h2>סידורי הפרלמנט</h2><form id="settings-form"><label for="group-title">שם הקבוצה</label><input class="form-field" id="group-title" type="text" maxlength="80" required value="${esc(state.title)}" ${state.published?'disabled':''}><label for="close-time">מועד סגירה (לפי השעון במכשיר שלכם)</label><input class="form-field" id="close-time" type="datetime-local" required value="${localDate(state.deadline)}" ${state.configured&&isClosed()?'disabled':''}><p>המועד שנשמר, בשעון ישראל: ${fmt(state.deadline)}</p><label for="party-names">רשימות — שם אחד בכל שורה</label><textarea class="editnames" id="party-names" required readonly>${esc((state.parties.length?state.parties:exampleParties).join('\n'))}</textarea><p>רשימת המפלגות נקבעת מרכזית ואינה ניתנת לעריכה בקבוצה.</p><button class="btn primary wide" type="submit" ${state.published?'disabled':''}>שמירת הגדרות</button></form></section>${centralPanel()}</div><div><section class="panel"><h2>סוגרים את הבסטה</h2><p>בשעה שקבעתם הקלפי נסגרת לבד. אפשר לנעול גם עכשיו — ואז כולם רואים את הניחושים שהוגשו.</p><div class="actions">${button('lock',state.manualLocked?'פתיחה מחדש':'נעילה עכשיו',false,!state.configured||state.published||Date.now()+offset>=Date.parse(state.deadline))}</div></section><section class="panel"><h2>משתתפים · ${state.players.length}</h2>${friends()}</section></div></div>`;}
-function render(){if(!state)return;$('#group-name').textContent=state.title;$('#deadline').textContent=state.configured?'סגירה בשעון ישראל: '+fmt(state.deadline):'ממתינים להגדרת הקבוצה';$('#ballot-status').textContent=state.published?'התוצאות פורסמו':isClosed()?'התחזיות סגורות':'התחזיות פתוחות';root.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===tab);b.setAttribute('aria-current',b.dataset.tab===tab?'page':'false');});$('#ballot-content').innerHTML=({prediction,ranking,results,admin})[tab]();refresh();}
+function render(){if(!state)return;syncTabLinks();$('#group-name').textContent=state.title;$('#deadline').textContent=state.configured?'סגירה בשעון ישראל: '+fmt(state.deadline):'ממתינים להגדרת הקבוצה';$('#ballot-status').textContent=state.published?'התוצאות פורסמו':isClosed()?'התחזיות סגורות':'התחזיות פתוחות';root.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===tab);b.setAttribute('aria-current',b.dataset.tab===tab?'page':'false');});$('#ballot-content').innerHTML=({prediction,ranking,results,admin})[tab]();refresh();}
 function refresh(){const v=tab==='admin'?actual:draft,t=sum(v);if($('#seat-total'))$('#seat-total').textContent=t;if($('#seat-progress'))$('#seat-progress').style.width=Math.min(100,t/1.2)+'%';if($('#seat-remaining'))$('#seat-remaining').textContent=t===120?'120 בול. לפחות החשבון עובד.':t<120?`עוד ${120-t} מנדטים לחלוקה`:`יש להפחית ${t-120} מנדטים`;if(tab==='prediction'&&$('#submit')){$('#submit').disabled=busy||isClosed()||t!==120;if($('#seat-chart'))$('#seat-chart').innerHTML=chart();if(dirty)$('#save-status').textContent='שיניתם ולא שמרתם. תלחצו על הכפתור, שלא יהיה ״אבל התכוונתי״.';}if($('#save-mapping'))$('#save-mapping').disabled=busy||mappingDraft.some(m=>m.target==='');if(tab==='admin'&&$('#publish'))$('#publish').disabled=busy||t!==120||mappingDraft.some(m=>m.target==='');}
 async function action(fn){if(busy)return;busy=true;root.querySelectorAll('button').forEach(b=>b.disabled=true);tell('שומרים…');try{await fn();tell('סגור, נשמר. יש קבלות.');}catch(e){tell(e.message,true);}finally{busy=false;root.querySelectorAll('button').forEach(b=>b.disabled=false);if(state)render();}}
 async function copy(value){if(navigator.clipboard){await navigator.clipboard.writeText(value);}else{const x=document.createElement('textarea');x.value=value;document.body.append(x);x.select();if(!document.execCommand('copy')){x.remove();throw new Error('העתקה אוטומטית אינה זמינה; העתיקו את הקישור מהשדה');}x.remove();}tell('הקישור הועתק');}
 async function share(value){if(navigator.share){try{await navigator.share({title:'הקלפי — '+state.title,url:value});}catch(e){if(e.name!=='AbortError')throw e;}}else await copy(value);}
 root.addEventListener('input',e=>{if(e.target.matches('[data-seat]')){const v=tab==='admin'?actual:draft,i=Number(e.target.dataset.seat),n=Number(e.target.value);v[i]=Number.isFinite(n)?Math.min(120,Math.max(0,Math.trunc(n))):0;if(tab==='admin')actualDirty=true;else dirty=true;refresh();}});
 root.addEventListener('change',e=>{if(e.target.matches('[data-mapping]')){mappingDraft[Number(e.target.dataset.mapping)].target=e.target.value==='__none__'?null:e.target.value;actualDirty=true;refresh();return;}if(e.target.matches('[data-seat]'))e.target.value=(tab==='admin'?actual:draft)[Number(e.target.dataset.seat)];});
-root.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||busy)return;
+root.addEventListener('click',async e=>{
+ const link=e.target.closest('a[data-tab]');
+ if(link){if(e.button!==0||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey)return;e.preventDefault();if(!busy)navigateTab(link.dataset.tab);return;}
+ const b=e.target.closest('button');if(!b||busy)return;
 if(b.dataset.accountMode){accountMode=b.dataset.accountMode;renderAccount();tell('');return;}
 if(b.id==='account-logout'){accountMode='login';await accountAction(()=>accountApi('logout','POST',{}));return;}
-if(b.dataset.tab){if(tab==='admin'&&actualDirty&&!confirm('יש תוצאות שלא פורסמו. לעבור למסך אחר?'))return;tab=b.dataset.tab;history.replaceState(null,'',(tab==='admin'?'/admin':'/')+groupQuery);tell('');render();return;}
+
 if(b.dataset.step!==undefined){const v=tab==='admin'?actual:draft,i=Number(b.dataset.step);v[i]=Math.min(120,Math.max(0,v[i]+Number(b.dataset.delta)));if(tab==='admin')actualDirty=true;else dirty=true;root.querySelector(`[data-seat="${i}"]`).value=v[i];refresh();return;}
 try {switch(b.id){
 case 'refresh-group':if((dirty||actualDirty)&&!confirm('רענון עלול להחליף שינויים שטרם נשמרו אם סידורי הפרלמנט השתנו. להמשיך?'))break;await action(load);break;
@@ -85,7 +105,7 @@ case 'submit':await action(async()=>{await api('prediction','PUT',{prediction:dr
 case 'logout':await action(async()=>{if(state.accountManaged)await accountApi('logout','POST',{});else await api('admin/logout','POST',{});await load();});break;
 case 'lock':if(confirm(state.manualLocked?'לפתוח שוב תחזיות? כל התחזיות שכבר נחשפו יישארו ידועות לחברים.':'לנעול את התחזיות עכשיו? כל התחזיות שהוגשו ייחשפו לקבוצה.'))await action(async()=>{await api('admin/lock','PUT',{locked:!state.manualLocked,version:state.version});await load();});break;
 case 'save-mapping':if(confirm('לאשר ולשמור את כל התאמות השמות? תוצאות לא יפורסמו וההצבעה תישאר פתוחה.'))await action(async()=>{const counts=actual.slice(),note=$('#results-note').value;await api('admin/mapping','PUT',{mapping:mappingDraft,electionVersion:state.central.version});await load();actual=counts;state.central.note=note;actualDirty=true;});break;
-case 'publish':{const note=$('#results-note').value;if(confirm('לאשר את כל התאמות השמות, לנעול את ההצבעה ולפרסם את התוצאות בכל הקבוצות?'))await action(async()=>{await api('admin/results','PUT',{actual,note,parties:state.central.parties,mapping:mappingDraft,electionVersion:state.central.version});actualDirty=false;await load();tab='ranking';});break;}
+case 'publish':{const note=$('#results-note').value;if(confirm('לאשר את כל התאמות השמות, לנעול את ההצבעה ולפרסם את התוצאות בכל הקבוצות?'))await action(async()=>{await api('admin/results','PUT',{actual,note,parties:state.central.parties,mapping:mappingDraft,electionVersion:state.central.version});actualDirty=false;await load();tab='ranking';history.pushState({tab},'',tabUrl(tab));});break;}
 case 'copy-recovery':await copy(recoveryLink);break;
 case 'share-group':await share(groupUrl('/'));break;
 case 'share-report':await share(groupUrl('/','#ranking'));break;
@@ -111,9 +131,10 @@ async function init(){
   try{await loadAccount();}catch(e){tell(e.message,true);$('#ballot-status').textContent='החיבור נכשל';}
   return;
  }
- try{const fragment=location.hash;if(fragment.startsWith('#access=')){history.replaceState(null,'',location.pathname+groupQuery);await api('recover','POST',{token:fragment.slice(8)});}else if(fragment==='#ranking'){tab='ranking';history.replaceState(null,'',location.pathname+groupQuery);}await load();}catch(e){$('#ballot-content').innerHTML=`<section class="panel"><h1>הקלפי נתקעה</h1><p>${esc(e.message)}</p><div class="actions">${button('retry','יאללה, עוד ניסיון',true)}</div></section>`;$('#retry').onclick=init;tell(e.message,true);}}
+ try{const fragment=location.hash;if(fragment.startsWith('#access=')){tab='prediction';history.replaceState({tab},'',tabUrl(tab));await api('recover','POST',{token:fragment.slice(8)});}else{tab=tabFromLocation();history.replaceState({tab},'',tabUrl(tab));}await load();}catch(e){$('#ballot-content').innerHTML=`<section class="panel"><h1>הקלפי נתקעה</h1><p>${esc(e.message)}</p><div class="actions">${button('retry','יאללה, עוד ניסיון',true)}</div></section>`;$('#retry').onclick=init;tell(e.message,true);}}
 // Do not replace a form while someone is typing. Read-only reports refresh automatically.
 setInterval(async()=>{if(!state||busy)return;if(!state.closed&&Date.now()+offset>=Date.parse(state.deadline)){state.closed=true;render();tell('נגמר הזמן. הניחושים נעולים — בלי ״רק שינוי קטן״.');}try{if((tab==='ranking'||tab==='results')&&!dirty&&!actualDirty)await load();else{const fresh=await api('state');if(fresh.published&&fresh.electionVersion!==state.electionVersion){dirty=false;actualDirty=false;await load(fresh);tell('פורסמו תוצאות אמת מרכזיות. התחזיות נעולות והדירוגים עודכנו.');}}}catch{tell('הרענון נתקע. יכול להיות שהמספרים פה עוד לא מעודכנים.',true);}},15000);
+syncTabLinks();
 init();
 })();
 
