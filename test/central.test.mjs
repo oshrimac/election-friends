@@ -23,7 +23,7 @@ test('central results: approved name mapping, all-group locking, correction and 
   assert.equal(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Jerusalem',hour:'2-digit',minute:'2-digit'}).format(new Date(s.deadline)),'00:05');
   assert.equal(s.fixedParties,true);assert.equal(s.isCentralAdmin,false);
   await assert.rejects(()=>group.configure({version:s.version,title:'חדשה',parties:['x','y'],deadline:s.deadline},ownerAuth),e=>e.status===403);
-  await group.configure({version:s.version,title:'חדשה',parties:s.parties,deadline:s.deadline},ownerAuth);
+  await group.configure({version:s.version,title:'חדשה',parties:s.parties,deadline:new Date(Date.now()+86400000).toISOString()},ownerAuth);
   const player=await group.join({name:'חדשה'},'player');s=await group.read();
   const actual=DEFAULT_PARTIES.map(()=>0);actual[8]=10;actual[9]=110;
   await group.predict({version:s.version,prediction:actual},{player:player.token});
